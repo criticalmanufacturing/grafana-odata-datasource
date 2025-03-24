@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/d-velop/grafana-odata-datasource/pkg/plugin/odata"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -49,7 +50,12 @@ func newDatasourceInstance(ctx context.Context, settings backend.DataSourceInsta
 	}
 
 	return &ODataSourceInstance{
-		&ODataClientImpl{client, settings.URL, dsSettings.URLSpaceEncoding},
+		client: &ODataClientImpl{
+			httpClient:       client,
+			baseUrl:          settings.URL,
+			urlSpaceEncoding: dsSettings.URLSpaceEncoding,
+			cookieHeader: "",
+		},
 	}, nil
 }
 
@@ -72,7 +78,7 @@ func (ds *ODataSource) getClientInstance(ctx context.Context, pluginContext back
 }
 
 func (ds *ODataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse,
-	error) {
+error) {
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
 	response := backend.NewQueryDataResponse()
 	for _, q := range req.Queries {
@@ -83,7 +89,7 @@ func (ds *ODataSource) QueryData(ctx context.Context, req *backend.QueryDataRequ
 }
 
 func (ds *ODataSource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult,
-	error) {
+error) {
 	var status backend.HealthStatus
 	var message string
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
@@ -109,6 +115,16 @@ func (ds *ODataSource) CheckHealth(ctx context.Context, req *backend.CheckHealth
 
 func (ds *ODataSource) CallResource(ctx context.Context, req *backend.CallResourceRequest,
 	sender backend.CallResourceResponseSender) error {
+	rawInstance, _ := ds.im.Get(ctx, req.PluginContext)
+	dsInstance := rawInstance.(*ODataSourceInstance)
+
+	clientImpl, ok := dsInstance.client.(*ODataClientImpl)
+	if !ok {
+		return fmt.Errorf("expected *ODataClientImpl, got something else")
+	}
+
+	forwardAllCookies(req, clientImpl)
+
 	switch req.Path {
 	case "metadata":
 		return ds.getMetadata(ctx, req, sender)
@@ -117,6 +133,17 @@ func (ds *ODataSource) CallResource(ctx context.Context, req *backend.CallResour
 			Status: http.StatusNotFound,
 		})
 	}
+}
+
+func forwardAllCookies(req *backend.CallResourceRequest, client *ODataClientImpl) {
+	cookieHeaders, ok := req.Headers["Cookie"]
+	if !ok || len(cookieHeaders) == 0 {
+		client.SetCookieHeader("")
+		return
+	}
+
+	combined := strings.Join(cookieHeaders, "; ")
+	client.SetCookieHeader(combined)
 }
 
 func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery) backend.DataResponse {
@@ -161,7 +188,7 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 		props = append(props, *qm.TimeProperty)
 	}
 	resp, err := clientInstance.Get(qm.EntitySet.Name, props,
-		append(qm.FilterConditions, TimeRangeToFilter(query.TimeRange, qm.TimeProperty)...))
+	append(qm.FilterConditions, TimeRangeToFilter(query.TimeRange, qm.TimeProperty)...))
 	if err != nil {
 		response.Error = err
 		return response
@@ -217,7 +244,7 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 }
 
 func (ds *ODataSource) getMetadata(ctx context.Context, req *backend.CallResourceRequest,
-	sender backend.CallResourceResponseSender) error {
+sender backend.CallResourceResponseSender) error {
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
 	resp, err := clientInstance.GetMetadata()
 

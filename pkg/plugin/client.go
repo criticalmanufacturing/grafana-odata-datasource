@@ -15,17 +15,22 @@ type ODataClient interface {
 	GetServiceRoot() (*http.Response, error)
 	GetMetadata() (*http.Response, error)
 	Get(entitySet string, properties []property,
-		filterConditions []filterCondition) (*http.Response, error)
+	filterConditions []filterCondition) (*http.Response, error)
 }
 
 type ODataClientImpl struct {
 	httpClient       *http.Client
 	baseUrl          string
 	urlSpaceEncoding string
+	cookieHeader string
+}
+
+func (c *ODataClientImpl) SetCookieHeader(header string) {
+	c.cookieHeader = header
 }
 
 func (client *ODataClientImpl) GetServiceRoot() (*http.Response, error) {
-	return client.httpClient.Get(client.baseUrl)
+	return client.doGetRequest(client.baseUrl)
 }
 
 func (client *ODataClientImpl) GetMetadata() (*http.Response, error) {
@@ -34,7 +39,7 @@ func (client *ODataClientImpl) GetMetadata() (*http.Response, error) {
 		return nil, err
 	}
 	requestUrl.Path = path.Join(requestUrl.Path, odata.Metadata)
-	return client.httpClient.Get(requestUrl.String())
+	return client.doGetRequest(requestUrl.String())
 }
 
 func (client *ODataClientImpl) Get(entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error) {
@@ -45,7 +50,18 @@ func (client *ODataClientImpl) Get(entitySet string, properties []property, filt
 	}
 	urlString := requestUrl.String()
 	log.DefaultLogger.Debug("Constructed request url: ", urlString)
-	return client.httpClient.Get(urlString)
+	return client.doGetRequest(urlString)
+}
+
+func (client *ODataClientImpl) doGetRequest(urlToGet string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, urlToGet, nil)
+	if err != nil {
+		return nil, err
+	}
+	if client.cookieHeader != "" {
+		req.Header.Set("Cookie", client.cookieHeader)
+	}
+	return client.httpClient.Do(req)
 }
 
 func buildQueryUrl(baseUrl string, entitySet string, properties []property, filterConditions []filterCondition, urlSpaceEncoding string) (*url.URL, error) {
