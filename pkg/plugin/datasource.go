@@ -233,7 +233,7 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 
 		entityProperties = metadata.EntityTypes[entityType.EntityType].Properties
 	} else {
-		entityProperties = qm.Properties
+		entityProperties = props
 	}
 
 	if len(result.Value) > 0 {
