@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	if err := datasource.Manage("dvelop-odata-datasource", plugin.NewODataSource,
+	if err := datasource.Manage("criticalmanufacturing-odata-datasource", plugin.NewODataSource,
 		datasource.ManageOpts{}); err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)

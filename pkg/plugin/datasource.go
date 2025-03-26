@@ -54,7 +54,7 @@ func newDatasourceInstance(ctx context.Context, settings backend.DataSourceInsta
 			httpClient:       client,
 			baseUrl:          settings.URL,
 			urlSpaceEncoding: dsSettings.URLSpaceEncoding,
-			cookieHeader: "",
+			cookieHeader:     "",
 		},
 	}, nil
 }
@@ -77,8 +77,7 @@ func (ds *ODataSource) getClientInstance(ctx context.Context, pluginContext back
 	return clientInstance
 }
 
-func (ds *ODataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse,
-error) {
+func (ds *ODataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
 	response := backend.NewQueryDataResponse()
 	for _, q := range req.Queries {
@@ -88,8 +87,7 @@ error) {
 	return response, nil
 }
 
-func (ds *ODataSource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult,
-error) {
+func (ds *ODataSource) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	var status backend.HealthStatus
 	var message string
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
@@ -157,7 +155,7 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 	}
 
 	// Prevent empty queries from being executed
-	if qm.TimeProperty == nil && len(qm.Properties) == 0 {
+	if qm.ODataQueryString == "" && qm.TimeProperty == nil && len(qm.Properties) == 0 {
 		return response
 	}
 
@@ -168,32 +166,17 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 	}
 	frame.Meta.PreferredVisualization = data.VisTypeTable
 
-	if qm.TimeProperty != nil {
-		log.DefaultLogger.Debug("Time property configured", "name", qm.TimeProperty.Name)
-		labels, err := data.LabelsFromString("time=" + qm.TimeProperty.Name)
-		if err != nil {
-			response.Error = err
-			return response
-		}
-		field := data.NewField(qm.TimeProperty.Name, labels, odata.ToArray(qm.TimeProperty.Type))
-		frame.Fields = append(frame.Fields, field)
-	}
-	for _, prop := range qm.Properties {
-		field := data.NewField(prop.Name, nil, odata.ToArray(prop.Type))
-		frame.Fields = append(frame.Fields, field)
-	}
-
 	props := qm.Properties
 	if qm.TimeProperty != nil {
 		props = append(props, *qm.TimeProperty)
 	}
-	resp, err := clientInstance.Get(qm.EntitySet.Name, props,
-	append(qm.FilterConditions, TimeRangeToFilter(query.TimeRange, qm.TimeProperty)...))
+
+	resp, err := clientInstance.Get(qm.ODataQueryString, qm.EntitySet.Name, props,
+		append(qm.FilterConditions, TimeRangeToFilter(query.TimeRange, qm.TimeProperty)...))
 	if err != nil {
 		response.Error = err
 		return response
 	}
-
 	defer resp.Body.Close()
 
 	log.DefaultLogger.Debug("request response status", "status", resp.Status)
@@ -201,6 +184,7 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 		response.Error = fmt.Errorf("get failed with status code %d", resp.StatusCode)
 		return response
 	}
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		response.Error = err
@@ -215,32 +199,36 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 
 	log.DefaultLogger.Debug("query complete", "noOfEntities", len(result.Value))
 
-	for _, entry := range result.Value {
-		var values []interface{}
-
-		if qm.TimeProperty != nil {
-			values = make([]interface{}, len(qm.Properties)+1)
-			values[0] = odata.MapValue(entry[qm.TimeProperty.Name], qm.TimeProperty.Type)
-		} else {
-			values = make([]interface{}, len(qm.Properties))
+	if len(result.Value) > 0 {
+		firstEntry := result.Value[0]
+		for key, value := range firstEntry {
+			inferredType := inferType(value)
+			field := data.NewField(key, nil, odata.ToArray(inferredType))
+			frame.Fields = append(frame.Fields, field)
 		}
+	}
 
-		for i, prop := range qm.Properties {
-			index := i
-			if qm.TimeProperty != nil {
-				index++
-			}
+	for _, entry := range result.Value {
+		values := make([]interface{}, len(frame.Fields))
 
-			if value, ok := entry[prop.Name]; ok {
-				values[index] = odata.MapValue(value, prop.Type)
+		for i, field := range frame.Fields {
+			if value, ok := entry[field.Name]; ok {
+				values[i] = odata.MapValue(value, inferType(value))
 			} else {
-				values[index] = nil
+				values[i] = nil
 			}
 		}
 		frame.AppendRow(values...)
 	}
+
 	response.Frames = append(response.Frames, frame)
 	return response
+}
+
+// Helper function to infer data type
+// TODO: This information should come from the metadata
+func inferType(value interface{}) string {
+	return "string"
 }
 
 func (ds *ODataSource) getMetadata(ctx context.Context, req *backend.CallResourceRequest,

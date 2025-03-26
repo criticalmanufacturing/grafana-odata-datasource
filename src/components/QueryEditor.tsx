@@ -1,5 +1,5 @@
 import React, { PureComponent } from 'react';
-import { Button, InlineFormLabel, LegacyForms, Input } from '@grafana/ui';
+import { Button, InlineFormLabel, LegacyForms, Input, Switch } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { ODataSource } from '../DataSource';
 import { EntitySet, FilterCondition, Metadata, ODataOptions, ODataQuery, Property, FilterOperators } from '../types';
@@ -14,6 +14,8 @@ interface State {
   timeProperties: Array<SelectableValue<Property>>;
   allProperties: Array<SelectableValue<Property>>;
   filterOperators: Array<SelectableValue<string>>;
+  oDataQueryString: string | undefined;
+  showODataQuery: boolean;
 }
 
 enum PropertyKind {
@@ -33,6 +35,8 @@ export class QueryEditor extends PureComponent<Props, State> {
       timeProperties: [],
       allProperties: [],
       filterOperators: [],
+      oDataQueryString: undefined,
+      showODataQuery: false,
     };
   }
 
@@ -47,16 +51,21 @@ export class QueryEditor extends PureComponent<Props, State> {
         })),
         timeProperties: this.mapProperties(metadata, entityType, PropertyKind.Time),
         allProperties: this.mapProperties(metadata, entityType, PropertyKind.All),
+        oDataQueryString: this.props.query.oDataQueryString || '',
+        showODataQuery: this.props.query.oDataQueryString ? true : false
       });
     });
+  
     const filterOperators: Array<SelectableValue<string>> = FilterOperators.map((operator) => ({
       label: operator,
       value: operator,
     }));
+    
     this.setState({
       filterOperators: filterOperators,
     });
   }
+  
 
   mapProperties(metadata: Metadata | undefined, entityType: string | undefined, propertyKind: PropertyKind) {
     if (!metadata || !entityType || !metadata.entityTypes[entityType]) {
@@ -85,6 +94,26 @@ export class QueryEditor extends PureComponent<Props, State> {
     query.timeProperty = null;
     query.properties = [];
   }
+
+  toggleView = () => {
+    this.setState((prevState) => {
+      const newShowODataQuery = !prevState.showODataQuery;
+
+      this.props.query.oDataQueryString = newShowODataQuery ? prevState.oDataQueryString : '';
+
+      return {
+        showODataQuery: newShowODataQuery
+      };
+    }, this.update);
+  };
+
+  onODataQueryStringChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const oDataQueryString = event.target.value;
+    this.setState({ oDataQueryString });
+    this.props.query.oDataQueryString = oDataQueryString;
+    this.props.onChange(this.props.query);
+    this.props.onRunQuery();
+  };
 
   onEntitySetChange = (option: SelectableValue<EntitySet>) => {
     if (this.props.query.entitySet?.name === option.value?.name) {
@@ -150,7 +179,7 @@ export class QueryEditor extends PureComponent<Props, State> {
   };
 
   render() {
-    const { entitySets, timeProperties, allProperties, filterOperators } = this.state;
+    const { entitySets, timeProperties, allProperties, filterOperators, oDataQueryString, showODataQuery } = this.state;
     let property = null;
     const listProperties = this.props.query.properties?.map((selectedProperty, index) => {
       property = (
@@ -252,47 +281,72 @@ export class QueryEditor extends PureComponent<Props, State> {
     return (
       <div>
         <div className="gf-form-inline">
-          <div className="gf-form">
-            <InlineFormLabel width={8} tooltip="Select an entity set for a list of available metrics.">
-              Entity set
-            </InlineFormLabel>
-            <Select
-              value={entitySets.find((o) => o.value?.name === this.props.query.entitySet?.name)}
-              isClearable={true}
-              placeholder="(Entity set)"
-              onChange={this.onEntitySetChange}
-              onBlur={this.props.onRunQuery}
-              options={entitySets}
-              isSearchable={false}
-            />
-            <InlineFormLabel width={8} tooltip="Time property">
-              Time property
-            </InlineFormLabel>
-            <Select
-              value={timeProperties.find((o) => o.value?.name === this.props.query.timeProperty?.name)}
-              isClearable={true}
-              placeholder="(Property)"
-              onChange={this.onTimePropertyChange}
-              onBlur={this.props.onRunQuery}
-              options={timeProperties}
-              isSearchable={false}
-            />
+          <div className="gf-form" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <InlineFormLabel width={8} tooltip="Write the full OData Query.">OData Query</InlineFormLabel>
+            <Switch value={showODataQuery} onChange={this.toggleView} />
           </div>
         </div>
-        {listProperties}
-        <div className="gf-form-inline">
-          <div className={'gf-form'}>
-            <Button variant={'secondary'} onClick={this.addProperty}>
-              + Select
-            </Button>
+
+        {showODataQuery ? (
+          <div className="gf-form-inline">
+            <div className="gf-form" style={{ width: '100%' }}>
+              <Input
+                value={oDataQueryString}
+                required={true}
+                type="text"
+                placeholder="(odata query)"
+                onChange={this.onODataQueryStringChange}
+                onBlur={this.props.onRunQuery}
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
-        </div>
-        {listFilters}
-        <div className={'gf-form'}>
-          <Button variant={'secondary'} onClick={this.addFilterCondition}>
-            + Filter condition
-          </Button>
-        </div>
+        ) : (
+          <div>
+            <div className="gf-form-inline">
+              <div className="gf-form">
+                <InlineFormLabel width={8} tooltip="Select an entity set for a list of available metrics.">
+                  Entity set
+                </InlineFormLabel>
+                <Select
+                  value={entitySets.find((o) => o.value?.name === this.props.query.entitySet?.name)}
+                  isClearable={true}
+                  placeholder="(Entity set)"
+                  onChange={this.onEntitySetChange}
+                  onBlur={this.props.onRunQuery}
+                  options={entitySets}
+                  isSearchable={false}
+                />
+                <InlineFormLabel width={8} tooltip="Time property">
+                  Time property
+                </InlineFormLabel>
+                <Select
+                  value={timeProperties.find((o) => o.value?.name === this.props.query.timeProperty?.name)}
+                  isClearable={true}
+                  placeholder="(Property)"
+                  onChange={this.onTimePropertyChange}
+                  onBlur={this.props.onRunQuery}
+                  options={timeProperties}
+                  isSearchable={false}
+                />
+              </div>
+            </div>
+            {listProperties}
+            <div className="gf-form-inline">
+              <div className={'gf-form'}>
+                <Button variant={'secondary'} onClick={this.addProperty}>
+                  + Select
+                </Button>
+              </div>
+            </div>
+            {listFilters}
+            <div className={'gf-form'}>
+              <Button variant={'secondary'} onClick={this.addFilterCondition}>
+                + Filter condition
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   grafana:
-    container_name: 'dvelop-odata-datasource'
+    container_name: 'criticalmanufacturing-odata-datasource'
     build:
       context: ./.config
       args:
@@ -13,7 +13,7 @@ services:
     environment:
       GF_LOG_LEVEL: 'debug'
     volumes:
-      - ./dist:/var/lib/grafana/plugins/dvelop-odata-datasource
+      - ./dist:/var/lib/grafana/plugins/criticalmanufacturing-odata-datasource
       - ./provisioning:/etc/grafana/provisioning
   test-server:
     build: test-server

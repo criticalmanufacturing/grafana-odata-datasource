@@ -6,6 +6,7 @@ export interface ODataQuery extends DataQuery {
   timeProperty?: Property | null;
   properties?: Property[];
   filterConditions?: FilterCondition[];
+  oDataQueryString?: string;
 }
 
 export const FilterOperators: string[] = ['eq', 'ne', 'gt', 'ge', 'lt', 'le'];

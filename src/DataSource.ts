@@ -14,6 +14,8 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
       filterCondition.value = templateSrv.replace(filterCondition.value, scopedVars);
     });
 
+    query.oDataQueryString = templateSrv.replace(query.oDataQueryString, scopedVars);
+
     return {
       ...query,
     };

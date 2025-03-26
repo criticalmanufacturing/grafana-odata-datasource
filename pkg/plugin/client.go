@@ -14,15 +14,14 @@ import (
 type ODataClient interface {
 	GetServiceRoot() (*http.Response, error)
 	GetMetadata() (*http.Response, error)
-	Get(entitySet string, properties []property,
-	filterConditions []filterCondition) (*http.Response, error)
+	Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error)
 }
 
 type ODataClientImpl struct {
 	httpClient       *http.Client
 	baseUrl          string
 	urlSpaceEncoding string
-	cookieHeader string
+	cookieHeader     string
 }
 
 func (c *ODataClientImpl) SetCookieHeader(header string) {
@@ -42,15 +41,48 @@ func (client *ODataClientImpl) GetMetadata() (*http.Response, error) {
 	return client.doGetRequest(requestUrl.String())
 }
 
-func (client *ODataClientImpl) Get(entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error) {
-	requestUrl, err := buildQueryUrl(client.baseUrl, entitySet, properties,
-		filterConditions, client.urlSpaceEncoding)
-	if err != nil {
-		return nil, err
+func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error) {
+	var requestUrl string
+
+	if oDataQueryString != "" {
+		parsedBaseUrl, err := url.Parse(client.baseUrl)
+		if err != nil {
+			return nil, err
+		}
+	
+		parsedQuery, err := url.Parse(oDataQueryString)
+		if err != nil {
+			return nil, err
+		}
+	
+		parsedBaseUrl.Path = path.Join(parsedBaseUrl.Path, parsedQuery.Path)
+		params, _ := url.ParseQuery(parsedBaseUrl.RawQuery)
+	
+		queryParams, _ := url.ParseQuery(parsedQuery.RawQuery)
+		for key, values := range queryParams {
+			for _, value := range values {
+				params.Add(key, value)
+			}
+		}
+	
+		encodedUrl := params.Encode()
+		if client.urlSpaceEncoding == "%20" {
+			encodedUrl = strings.ReplaceAll(encodedUrl, "+", "%20")
+		}
+		parsedBaseUrl.RawQuery = encodedUrl
+	
+		requestUrl = parsedBaseUrl.String()
+		log.DefaultLogger.Debug("Using provided OData query string: " + requestUrl)
+	} else {
+		builtUrl, err := buildQueryUrl(client.baseUrl, entitySet, properties, filterConditions, client.urlSpaceEncoding)
+		if err != nil {
+			return nil, err
+		}
+		requestUrl = builtUrl.String()
+		log.DefaultLogger.Debug("Constructed request url: ", requestUrl)
 	}
-	urlString := requestUrl.String()
-	log.DefaultLogger.Debug("Constructed request url: ", urlString)
-	return client.doGetRequest(urlString)
+
+	return client.doGetRequest(requestUrl)
 }
 
 func (client *ODataClientImpl) doGetRequest(urlToGet string) (*http.Response, error) {

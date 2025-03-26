@@ -5,6 +5,7 @@ type queryModel struct {
 	TimeProperty     *property         `json:"timeProperty"`
 	Properties       []property        `json:"properties"`
 	FilterConditions []filterCondition `json:"filterConditions"`
+	ODataQueryString string            `json:"oDataQueryString"`
 }
 
 type schema struct {

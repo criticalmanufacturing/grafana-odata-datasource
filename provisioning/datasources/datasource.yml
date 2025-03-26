@@ -9,7 +9,7 @@ deleteDatasources:
 datasources:
   - name: 'OData-Test'
     uid: PD461F79B494E0A01
-    type: dvelop-odata-datasource
+    type: criticalmanufacturing-odata-datasource
     access: proxy
     orgId: 1
     isDefault: true
@@ -20,7 +20,7 @@ datasources:
       urlSpaceEncoding: '%20'
   - name: 'OData-Mock'
     uid: PD461F79B494E0A02
-    type: dvelop-odata-datasource
+    type: criticalmanufacturing-odata-datasource
     access: proxy
     orgId: 1
     isDefault: false

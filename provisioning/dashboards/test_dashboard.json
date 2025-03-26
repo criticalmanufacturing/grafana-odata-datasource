@@ -29,7 +29,7 @@
   "panels": [
     {
       "datasource": {
-        "type": "dvelop-odata-datasource",
+        "type": "criticalmanufacturing-odata-datasource",
         "uid": "PD461F79B494E0A01"
       },
       "fieldConfig": {
@@ -85,7 +85,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "dvelop-odata-datasource",
+            "type": "criticalmanufacturing-odata-datasource",
             "uid": "PD461F79B494E0A01"
           },
           "entitySet": {
@@ -118,7 +118,7 @@
     },
     {
       "datasource": {
-        "type": "dvelop-odata-datasource",
+        "type": "criticalmanufacturing-odata-datasource",
         "uid": "PD461F79B494E0A02"
       },
       "fieldConfig": {
@@ -174,7 +174,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "dvelop-odata-datasource",
+            "type": "criticalmanufacturing-odata-datasource",
             "uid": "PD461F79B494E0A02"
           },
           "entitySet": {
@@ -207,7 +207,7 @@
     },
     {
       "datasource": {
-        "type": "dvelop-odata-datasource",
+        "type": "criticalmanufacturing-odata-datasource",
         "uid": "PD461F79B494E0A01"
       },
       "fieldConfig": {
@@ -288,7 +288,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "dvelop-odata-datasource",
+            "type": "criticalmanufacturing-odata-datasource",
             "uid": "PD461F79B494E0A01"
           },
           "entitySet": {
@@ -321,7 +321,7 @@
     },
     {
       "datasource": {
-        "type": "dvelop-odata-datasource",
+        "type": "criticalmanufacturing-odata-datasource",
         "uid": "PD461F79B494E0A02"
       },
       "fieldConfig": {
@@ -402,7 +402,7 @@
       "targets": [
         {
           "datasource": {
-            "type": "dvelop-odata-datasource",
+            "type": "criticalmanufacturing-odata-datasource",
             "uid": "PD461F79B494E0A02"
           },
           "entitySet": {
