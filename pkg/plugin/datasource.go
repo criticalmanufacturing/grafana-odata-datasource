@@ -199,10 +199,53 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 
 	log.DefaultLogger.Debug("query complete", "noOfEntities", len(result.Value))
 
+	index := strings.Index(qm.ODataQueryString, "?")
+	
+	var tableName string
+	
+	if index != -1 {
+		tableName = qm.ODataQueryString[:index]
+	} else {
+		tableName = qm.ODataQueryString
+	}
+
+	var entityProperties []property
+
+	if qm.ODataQueryString != "" {
+		metadataBytes, err := ds.fetchMetadata(clientInstance)
+		if err != nil {
+			response.Error = err
+			return response
+		}
+
+		var metadata schema
+		err = json.Unmarshal(metadataBytes, &metadata)
+		if err != nil {
+			response.Error = err
+			return response
+		}
+
+		entityType, ok := metadata.EntitySets[tableName]
+		if !ok {
+			response.Error = fmt.Errorf("entity set %s not found in metadata", tableName)
+			return response
+		}
+
+		entityProperties = metadata.EntityTypes[entityType.EntityType].Properties
+	} else {
+		entityProperties = qm.Properties
+	}
+
 	if len(result.Value) > 0 {
 		firstEntry := result.Value[0]
-		for key, value := range firstEntry {
-			inferredType := inferType(value)
+		for key := range firstEntry {
+			var inferredType string
+			for _, prop := range entityProperties {
+				if prop.Name == key {
+					inferredType = prop.Type
+					break
+				}
+			}
 			field := data.NewField(key, nil, odata.ToArray(inferredType))
 			frame.Fields = append(frame.Fields, field)
 		}
@@ -213,7 +256,14 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 
 		for i, field := range frame.Fields {
 			if value, ok := entry[field.Name]; ok {
-				values[i] = odata.MapValue(value, inferType(value))
+				var inferredType string
+				for _, prop := range entityProperties {
+					if prop.Name == field.Name {
+						inferredType = prop.Type
+						break
+					}
+				}
+				values[i] = odata.MapValue(value, inferredType)
 			} else {
 				values[i] = nil
 			}
@@ -225,35 +275,41 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 	return response
 }
 
-// Helper function to infer data type
-// TODO: This information should come from the metadata
-func inferType(value interface{}) string {
-	return "string"
-}
-
-func (ds *ODataSource) getMetadata(ctx context.Context, req *backend.CallResourceRequest,
-sender backend.CallResourceResponseSender) error {
+func (ds *ODataSource) getMetadata(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
-	resp, err := clientInstance.GetMetadata()
-
+	responseBody, err := ds.fetchMetadata(clientInstance)
 	if err != nil {
 		return err
+	}
+
+	return sender.Send(&backend.CallResourceResponse{
+		Status: http.StatusOK,
+		Body:   responseBody,
+	})
+}
+
+func (ds *ODataSource) fetchMetadata(clientInstance ODataClient) ([]byte, error) {
+	resp, err := clientInstance.GetMetadata()
+	if err != nil {
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get metadata failed with status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("get metadata failed with status code %d", resp.StatusCode)
 	}
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.DefaultLogger.Error("error reading response body")
-		return err
+		return nil, err
 	}
+
 	var edmx odata.Edmx
 	err = xml.Unmarshal(bodyBytes, &edmx)
 	if err != nil {
 		log.DefaultLogger.Error("error unmarshalling response body")
-		return err
+		return nil, err
 	}
 
 	metadata := schema{
@@ -292,10 +348,8 @@ sender backend.CallResourceResponseSender) error {
 	responseBody, err := json.Marshal(metadata)
 	if err != nil {
 		log.DefaultLogger.Error("error marshalling response body")
-		return err
+		return nil, err
 	}
-	return sender.Send(&backend.CallResourceResponse{
-		Status: http.StatusOK,
-		Body:   responseBody,
-	})
+
+	return responseBody, nil
 }
