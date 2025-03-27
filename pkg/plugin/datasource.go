@@ -155,7 +155,8 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 	}
 
 	// Prevent empty queries from being executed
-	if qm.ODataQueryString == "" && qm.TimeProperty == nil && len(qm.Properties) == 0 {
+	if qm.ODataQueryString == "" && qm.TimeProperty == nil && (len(qm.Properties) == 0 || 
+	!hasNonEmptyName(qm.Properties)) {
 		return response
 	}
 
@@ -352,4 +353,13 @@ func (ds *ODataSource) fetchMetadata(clientInstance ODataClient) ([]byte, error)
 	}
 
 	return responseBody, nil
+}
+
+func hasNonEmptyName(properties []property) bool {
+    for _, prop := range properties {
+        if prop.Name != "" {
+            return true
+        }
+    }
+    return false
 }

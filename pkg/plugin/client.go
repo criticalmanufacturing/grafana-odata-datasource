@@ -86,14 +86,50 @@ func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, pr
 }
 
 func (client *ODataClientImpl) doGetRequest(urlToGet string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, urlToGet, nil)
-	if err != nil {
-		return nil, err
+	if strings.Contains(urlToGet, "=") {
+        newURL, body := processURL(urlToGet)
+
+        req, err := http.NewRequest(http.MethodPost, newURL, strings.NewReader(body))
+        if err != nil {
+            return nil, err
+        }
+
+        req.Header.Set("Content-Type", "text/plain")
+        if client.cookieHeader != "" {
+            req.Header.Set("Cookie", client.cookieHeader)
+        }
+
+        return client.httpClient.Do(req)
+    } else {
+		req, err := http.NewRequest(http.MethodGet, urlToGet, nil)
+		if err != nil {
+			return nil, err
+		}
+		if client.cookieHeader != "" {
+			req.Header.Set("Cookie", client.cookieHeader)
+		}
+		return client.httpClient.Do(req)
 	}
-	if client.cookieHeader != "" {
-		req.Header.Set("Cookie", client.cookieHeader)
-	}
-	return client.httpClient.Do(req)
+}
+
+func processURL(encodedURL string) (string, string) {
+    parts := strings.SplitN(encodedURL, "?", 2)
+    baseUrl := parts[0]
+    queryString := ""
+    if len(parts) > 1 {
+        queryString = parts[1]
+    }
+
+    decodedQuery, err := url.QueryUnescape(queryString)
+    if err != nil {
+        fmt.Println("Error decoding query string:", err)
+        return "", ""
+    }
+
+    url := fmt.Sprintf("%s?$query", baseUrl)
+    body := decodedQuery
+
+    return url, body
 }
 
 func buildQueryUrl(baseUrl string, entitySet string, properties []property, filterConditions []filterCondition, urlSpaceEncoding string) (*url.URL, error) {

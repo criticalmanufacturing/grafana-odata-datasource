@@ -112,7 +112,6 @@ export class QueryEditor extends PureComponent<Props, State> {
     this.setState({ oDataQueryString });
     this.props.query.oDataQueryString = oDataQueryString;
     this.props.onChange(this.props.query);
-    this.props.onRunQuery();
   };
 
   onEntitySetChange = (option: SelectableValue<EntitySet>) => {
