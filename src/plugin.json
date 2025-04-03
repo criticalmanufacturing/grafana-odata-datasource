@@ -10,7 +10,7 @@
   "alerting": true,
   "streaming": false,
   "tracing": false,
-  "executable": "gpx_odata-datasource",
+  "executable": "cmf_backend_odata_plugin",
   "info": {
     "description": "OData data source for Grafana",
     "author": {
