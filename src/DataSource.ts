@@ -23,9 +23,9 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
     };
   }
 
-  async metricFindQuery(query: ODataQuery, options?: any): Promise<MetricFindValue[]> {
+  async metricFindQuery(query: ODataQuery, _options?: any): Promise<MetricFindValue[]> {
     const response = await firstValueFrom(this.query({
-      targets: [{...query, refId: 'Betoneira'}]
+      targets: [{...query, refId: 'ODataQuery'}]
     } as DataQueryRequest<ODataQuery>));
 
     const metricFindValues: MetricFindValue[] = [];

@@ -14,8 +14,8 @@
   "info": {
     "description": "OData data source for Grafana",
     "author": {
-      "name": "d.velop AG",
-      "url": "https://www.d-velop.de"
+      "name": "Critical Manufacturing",
+      "url": "https://www.criticalmanufacturing.com/"
     },
     "keywords": [
       "odata",

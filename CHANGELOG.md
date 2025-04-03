@@ -1,5 +1,15 @@
 # Change Log
 
+## [1.2.0] 2025-04-03
+
+### Features
+- Support for Allowed Cookies
+- Added option to send the full OData Query instead of using the query builder
+- Support for using variables in the full OData Query
+- If there are OData Query options do a POST instead of GET
+- Added Variable Query Editor
+- Support for using variables in other variables
+
 ## [1.1.0] 2024-03-14
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "grafana-odata-datasource",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Loads data from OData (V4) compliant data sources to Grafana",
   "bugs": {
     "url": "https://github.com/d-velop/grafana-odata-datasource/issues"
@@ -29,7 +29,7 @@
     "sign": "npx --yes @grafana/sign-plugin@latest",
     "checkCompatibility": "npx @grafana/levitate@latest is-compatible --path src/module.ts --target @grafana/data,@grafana/ui,@grafana/runtime"
   },
-  "author": "d.velop AG",
+  "author": "Critical Manufacturing",
   "license": "Apache-2.0",
   "devDependencies": {
     "@grafana/e2e": "^10.4.3",
