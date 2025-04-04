@@ -16,6 +16,7 @@ interface State {
   filterOperators: Array<SelectableValue<string>>;
   oDataQueryString: string | undefined;
   showODataQuery: boolean;
+  usePost: boolean;
 }
 
 enum PropertyKind {
@@ -37,6 +38,7 @@ export class QueryEditor extends PureComponent<Props, State> {
       filterOperators: [],
       oDataQueryString: undefined,
       showODataQuery: false,
+      usePost: false
     };
   }
 
@@ -52,20 +54,21 @@ export class QueryEditor extends PureComponent<Props, State> {
         timeProperties: this.mapProperties(metadata, entityType, PropertyKind.Time),
         allProperties: this.mapProperties(metadata, entityType, PropertyKind.All),
         oDataQueryString: this.props.query.oDataQueryString || '',
-        showODataQuery: this.props.query.oDataQueryString ? true : false
+        showODataQuery: this.props.query.oDataQueryString ? true : false,
+        usePost: this.props.query.usePost || false
       });
     });
-  
+
     const filterOperators: Array<SelectableValue<string>> = FilterOperators.map((operator) => ({
       label: operator,
       value: operator,
     }));
-    
+
     this.setState({
       filterOperators: filterOperators,
     });
   }
-  
+
 
   mapProperties(metadata: Metadata | undefined, entityType: string | undefined, propertyKind: PropertyKind) {
     if (!metadata || !entityType || !metadata.entityTypes[entityType]) {
@@ -94,6 +97,13 @@ export class QueryEditor extends PureComponent<Props, State> {
     query.timeProperty = null;
     query.properties = [];
   }
+
+  togglePost = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const usePost = event.target.checked;
+    this.setState({ usePost });
+    this.props.query.usePost = usePost;
+    this.update();
+  };
 
   toggleView = () => {
     this.setState((prevState) => {
@@ -178,12 +188,12 @@ export class QueryEditor extends PureComponent<Props, State> {
   };
 
   render() {
-    const { entitySets, timeProperties, allProperties, filterOperators, oDataQueryString, showODataQuery } = this.state;
+    const { entitySets, timeProperties, allProperties, filterOperators, oDataQueryString, showODataQuery, usePost } = this.state;
     let property = null;
     const listProperties = this.props.query.properties?.map((selectedProperty, index) => {
       property = (
         <div className={'gf-form'}>
-          <InlineFormLabel width={8} tooltip={'Add select'}>
+          <InlineFormLabel width={10} tooltip={'Add select'}>
             Select
           </InlineFormLabel>
           <Select
@@ -207,7 +217,7 @@ export class QueryEditor extends PureComponent<Props, State> {
       filter = (
         <div className="gf-form-inline">
           <div className={'gf-form'}>
-            <InlineFormLabel width={8} tooltip={'Add filter condition'}>
+            <InlineFormLabel width={10} tooltip={'Add filter condition'}>
               {index === 0 ? 'Filter' : 'AND'}
             </InlineFormLabel>
             <Select
@@ -281,11 +291,16 @@ export class QueryEditor extends PureComponent<Props, State> {
       <div>
         <div className="gf-form-inline">
           <div className="gf-form" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <InlineFormLabel width={8} tooltip="Write the full OData Query.">OData Query</InlineFormLabel>
+            <InlineFormLabel width={10} tooltip="Make the OData request using POST instead of GET.">Use POST Method</InlineFormLabel>
+            <Switch value={usePost} onChange={this.togglePost} />
+          </div>
+        </div>
+        <div className="gf-form-inline">
+          <div className="gf-form" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <InlineFormLabel width={10} tooltip="Write the full OData Query.">OData Query</InlineFormLabel>
             <Switch value={showODataQuery} onChange={this.toggleView} />
           </div>
         </div>
-
         {showODataQuery ? (
           <div className="gf-form-inline">
             <div className="gf-form" style={{ width: '100%' }}>
@@ -304,7 +319,7 @@ export class QueryEditor extends PureComponent<Props, State> {
           <div>
             <div className="gf-form-inline">
               <div className="gf-form">
-                <InlineFormLabel width={8} tooltip="Select an entity set for a list of available metrics.">
+                <InlineFormLabel width={10} tooltip="Select an entity set for a list of available metrics.">
                   Entity set
                 </InlineFormLabel>
                 <Select
@@ -316,7 +331,7 @@ export class QueryEditor extends PureComponent<Props, State> {
                   options={entitySets}
                   isSearchable={false}
                 />
-                <InlineFormLabel width={8} tooltip="Time property">
+                <InlineFormLabel width={10} tooltip="Time property">
                   Time property
                 </InlineFormLabel>
                 <Select

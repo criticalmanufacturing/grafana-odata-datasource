@@ -6,6 +6,7 @@ type queryModel struct {
 	Properties       []property        `json:"properties"`
 	FilterConditions []filterCondition `json:"filterConditions"`
 	ODataQueryString string            `json:"oDataQueryString"`
+	UsePost          bool              `json:"usePost"`
 }
 
 type schema struct {

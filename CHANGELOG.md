@@ -6,7 +6,7 @@
 - Support for Allowed Cookies
 - Added option to send the full OData Query instead of using the query builder
 - Support for using variables in the full OData Query
-- If there are OData Query options do a POST instead of GET
+- Added a switch to toggle between GET method and POST method (POST does the request with $query)
 - Added Variable Query Editor
 - Support for using variables in other variables
 

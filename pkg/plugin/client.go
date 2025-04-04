@@ -14,7 +14,7 @@ import (
 type ODataClient interface {
 	GetServiceRoot() (*http.Response, error)
 	GetMetadata() (*http.Response, error)
-	Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error)
+	Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition, usePost bool) (*http.Response, error)
 }
 
 type ODataClientImpl struct {
@@ -41,7 +41,7 @@ func (client *ODataClientImpl) GetMetadata() (*http.Response, error) {
 	return client.doGetRequest(requestUrl.String())
 }
 
-func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition) (*http.Response, error) {
+func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, properties []property, filterConditions []filterCondition, usePost bool) (*http.Response, error) {
 	var requestUrl string
 
 	if oDataQueryString != "" {
@@ -49,28 +49,28 @@ func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, pr
 		if err != nil {
 			return nil, err
 		}
-	
+
 		parsedQuery, err := url.Parse(oDataQueryString)
 		if err != nil {
 			return nil, err
 		}
-	
+
 		parsedBaseUrl.Path = path.Join(parsedBaseUrl.Path, parsedQuery.Path)
 		params, _ := url.ParseQuery(parsedBaseUrl.RawQuery)
-	
+
 		queryParams, _ := url.ParseQuery(parsedQuery.RawQuery)
 		for key, values := range queryParams {
 			for _, value := range values {
 				params.Add(key, value)
 			}
 		}
-	
+
 		encodedUrl := params.Encode()
 		if client.urlSpaceEncoding == "%20" {
 			encodedUrl = strings.ReplaceAll(encodedUrl, "+", "%20")
 		}
 		parsedBaseUrl.RawQuery = encodedUrl
-	
+
 		requestUrl = parsedBaseUrl.String()
 		log.DefaultLogger.Debug("Using provided OData query string: " + requestUrl)
 	} else {
@@ -82,34 +82,38 @@ func (client *ODataClientImpl) Get(oDataQueryString string, entitySet string, pr
 		log.DefaultLogger.Debug("Constructed request url: ", requestUrl)
 	}
 
+	if usePost {
+		return client.doPostRequest(requestUrl)
+	}
+
 	return client.doGetRequest(requestUrl)
 }
 
 func (client *ODataClientImpl) doGetRequest(urlToGet string) (*http.Response, error) {
-	if strings.Contains(urlToGet, "=") {
-        newURL, body := processURL(urlToGet)
-
-        req, err := http.NewRequest(http.MethodPost, newURL, strings.NewReader(body))
-        if err != nil {
-            return nil, err
-        }
-
-        req.Header.Set("Content-Type", "text/plain")
-        if client.cookieHeader != "" {
-            req.Header.Set("Cookie", client.cookieHeader)
-        }
-
-        return client.httpClient.Do(req)
-    } else {
-		req, err := http.NewRequest(http.MethodGet, urlToGet, nil)
-		if err != nil {
-			return nil, err
-		}
-		if client.cookieHeader != "" {
-			req.Header.Set("Cookie", client.cookieHeader)
-		}
-		return client.httpClient.Do(req)
+	req, err := http.NewRequest(http.MethodGet, urlToGet, nil)
+	if err != nil {
+		return nil, err
 	}
+	if client.cookieHeader != "" {
+		req.Header.Set("Cookie", client.cookieHeader)
+	}
+	return client.httpClient.Do(req)
+}
+
+func (client *ODataClientImpl) doPostRequest(urlToPost string) (*http.Response, error) {
+	newURL, body := processURL(urlToPost)
+
+	req, err := http.NewRequest(http.MethodPost, newURL, strings.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "text/plain")
+	if client.cookieHeader != "" {
+		req.Header.Set("Cookie", client.cookieHeader)
+	}
+
+	return client.httpClient.Do(req)
 }
 
 func processURL(encodedURL string) (string, string) {
