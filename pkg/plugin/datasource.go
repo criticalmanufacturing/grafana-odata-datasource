@@ -78,6 +78,21 @@ func (ds *ODataSource) getClientInstance(ctx context.Context, pluginContext back
 }
 
 func (ds *ODataSource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	rawInstance, _ := ds.im.Get(ctx, req.PluginContext)
+	dsInstance := rawInstance.(*ODataSourceInstance)
+
+	clientImpl, ok := dsInstance.client.(*ODataClientImpl)
+	if !ok {
+		return nil, fmt.Errorf("expected *ODataClientImpl, got something else")
+	}
+
+	cookieHeaders, ok := req.Headers["Cookie"]
+	if !ok || len(cookieHeaders) == 0 {
+		clientImpl.SetCookieHeader("")
+		return nil, fmt.Errorf("error setting cookie")
+	}
+
+	clientImpl.SetCookieHeader(cookieHeaders)
 	clientInstance := ds.getClientInstance(ctx, req.PluginContext)
 	response := backend.NewQueryDataResponse()
 	for _, q := range req.Queries {
@@ -121,7 +136,14 @@ func (ds *ODataSource) CallResource(ctx context.Context, req *backend.CallResour
 		return fmt.Errorf("expected *ODataClientImpl, got something else")
 	}
 
-	forwardAllCookies(req, clientImpl)
+	cookieHeaders, ok := req.Headers["Cookie"]
+	if !ok || len(cookieHeaders) == 0 {
+		clientImpl.SetCookieHeader("")
+		return fmt.Errorf("error setting cookie")
+	}
+
+	combined := strings.Join(cookieHeaders, "; ")
+	clientImpl.SetCookieHeader(combined)
 
 	switch req.Path {
 	case "metadata":
@@ -131,17 +153,6 @@ func (ds *ODataSource) CallResource(ctx context.Context, req *backend.CallResour
 			Status: http.StatusNotFound,
 		})
 	}
-}
-
-func forwardAllCookies(req *backend.CallResourceRequest, client *ODataClientImpl) {
-	cookieHeaders, ok := req.Headers["Cookie"]
-	if !ok || len(cookieHeaders) == 0 {
-		client.SetCookieHeader("")
-		return
-	}
-
-	combined := strings.Join(cookieHeaders, "; ")
-	client.SetCookieHeader(combined)
 }
 
 func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery) backend.DataResponse {
