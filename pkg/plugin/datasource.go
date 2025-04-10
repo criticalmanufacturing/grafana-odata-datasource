@@ -249,16 +249,15 @@ func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery
 
 	if len(result.Value) > 0 {
 		firstEntry := result.Value[0]
-		for key := range firstEntry {
-			var inferredType string
-			for _, prop := range entityProperties {
+		for _, prop := range entityProperties {
+			for key := range firstEntry {
 				if prop.Name == key {
-					inferredType = prop.Type
+					inferredType := prop.Type
+					field := data.NewField(key, nil, odata.ToArray(inferredType))
+					frame.Fields = append(frame.Fields, field)
 					break
 				}
 			}
-			field := data.NewField(key, nil, odata.ToArray(inferredType))
-			frame.Fields = append(frame.Fields, field)
 		}
 	}
 
