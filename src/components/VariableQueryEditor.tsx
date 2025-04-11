@@ -1,5 +1,5 @@
 import { QueryEditorProps } from '@grafana/data';
-import { InlineFormLabel, Input, Switch } from '@grafana/ui';
+import { InlineFormLabel, Switch, TextArea } from '@grafana/ui';
 import React, { PureComponent } from 'react';
 import { ODataSource } from '../DataSource';
 import { ODataOptions, ODataQuery } from '../types';
@@ -20,17 +20,17 @@ export class VariableQueryEditor extends PureComponent<Props, State> {
     };
   }
 
-  onODataQueryStringChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  onODataQueryStringChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const oDataQueryString = event.target.value;
     this.setState({ oDataQueryString });
     this.props.onChange({ ...this.props.query, oDataQueryString });
   };
 
   togglePost = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const usePost = event.target.checked;
-      this.setState({ usePost });
-      this.props.onChange({ ...this.props.query, usePost });
-    };
+    const usePost = event.target.checked;
+    this.setState({ usePost });
+    this.props.onChange({ ...this.props.query, usePost });
+  };
 
   render() {
     const { oDataQueryString, usePost } = this.state;
@@ -46,15 +46,15 @@ export class VariableQueryEditor extends PureComponent<Props, State> {
         <div className="gf-form-inline">
           <div className="gf-form" style={{ width: '100%' }}>
             <InlineFormLabel width={10} tooltip="Write the full OData Query.">OData Query</InlineFormLabel>
-            <Input
-              value={oDataQueryString}
-              required
-              type="text"
-              placeholder="(odata query)"
-              onChange={this.onODataQueryStringChange}
-              style={{ width: '100%' }}
-            />
           </div>
+          <TextArea
+            value={oDataQueryString}
+            required
+            type="text"
+            placeholder="(odata query)"
+            onChange={this.onODataQueryStringChange}
+            style={{ width: '100%' }}
+          />
         </div>
       </div>
     );

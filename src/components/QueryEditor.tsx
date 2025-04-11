@@ -1,5 +1,5 @@
 import React, { PureComponent } from 'react';
-import { Button, InlineFormLabel, LegacyForms, Input, Switch } from '@grafana/ui';
+import { Button, InlineFormLabel, LegacyForms, Input, Switch, TextArea } from '@grafana/ui';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { ODataSource } from '../DataSource';
 import { EntitySet, FilterCondition, Metadata, ODataOptions, ODataQuery, Property, FilterOperators } from '../types';
@@ -117,7 +117,7 @@ export class QueryEditor extends PureComponent<Props, State> {
     }, this.update);
   };
 
-  onODataQueryStringChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  onODataQueryStringChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const oDataQueryString = event.target.value;
     this.setState({ oDataQueryString });
     this.props.query.oDataQueryString = oDataQueryString;
@@ -303,17 +303,17 @@ export class QueryEditor extends PureComponent<Props, State> {
         </div>
         {showODataQuery ? (
           <div className="gf-form-inline">
-            <div className="gf-form" style={{ width: '100%' }}>
-              <Input
-                value={oDataQueryString}
-                required={true}
-                type="text"
-                placeholder="(odata query)"
-                onChange={this.onODataQueryStringChange}
-                onBlur={this.props.onRunQuery}
-                style={{ width: '100%' }}
-              />
-            </div>
+          <div className="gf-form" style={{ width: '100%' }}>
+            <TextArea
+              value={oDataQueryString}
+              required={true}
+              type="text"
+              placeholder="(odata query)"
+              onChange={this.onODataQueryStringChange}
+              onBlur={this.props.onRunQuery}
+              style={{ width: '100%' }}
+            />
+          </div>
           </div>
         ) : (
           <div>
