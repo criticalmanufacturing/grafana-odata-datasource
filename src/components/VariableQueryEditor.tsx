@@ -16,7 +16,7 @@ export class VariableQueryEditor extends PureComponent<Props, State> {
     super(props);
     this.state = {
       oDataQueryString: props.query.oDataQueryString || '',
-      usePost: false
+      usePost: props.query.usePost || false
     };
   }
 
