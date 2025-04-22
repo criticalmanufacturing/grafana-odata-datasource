@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/d-velop/grafana-odata-datasource/pkg/plugin/odata"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -156,129 +158,55 @@ func (ds *ODataSource) CallResource(ctx context.Context, req *backend.CallResour
 
 func (ds *ODataSource) query(clientInstance ODataClient, query backend.DataQuery) backend.DataResponse {
 	log.DefaultLogger.Debug("query", "query.JSON", string(query.JSON))
-	response := backend.DataResponse{}
+	
+	var response backend.DataResponse
 	var qm queryModel
-	err := json.Unmarshal(query.JSON, &qm)
-	if err != nil {
-		response.Error = fmt.Errorf("error unmarshalling query json: %w", err)
+	if err := json.Unmarshal(query.JSON, &qm); err != nil {
+		return errorResponse("error unmarshalling query json", err)
+	}
+
+	if isQueryEmpty(qm) {
 		return response
 	}
 
-	// Prevent empty queries from being executed
-	if qm.ODataQueryString == "" && qm.TimeProperty == nil && (len(qm.Properties) == 0 || 
-	!hasNonEmptyName(qm.Properties)) {
-		return response
-	}
+	frame := ds.initFrame(query.RefID)
 
-	frame := data.NewFrame("response")
-	frame.Name = query.RefID
-	if frame.Meta == nil {
-		frame.Meta = &data.FrameMeta{}
-	}
-	frame.Meta.PreferredVisualization = data.VisTypeTable
-
-	props := qm.Properties
-	if qm.TimeProperty != nil {
-		props = append(props, *qm.TimeProperty)
-	}
-
+	props := ds.prepareProperties(qm)
 	resp, err := clientInstance.Get(qm.ODataQueryString, qm.EntitySet.Name, props,
 		append(qm.FilterConditions, TimeRangeToFilter(query.TimeRange, qm.TimeProperty)...), qm.UsePost)
 	if err != nil {
-		response.Error = err
-		return response
+		return errorResponse("odata get failed", err)
 	}
 	defer resp.Body.Close()
 
 	log.DefaultLogger.Debug("request response status", "status", resp.Status)
 	if resp.StatusCode != http.StatusOK {
-		response.Error = fmt.Errorf("get failed with status code %d", resp.StatusCode)
-		return response
+		return errorResponse(fmt.Sprintf("get failed with status code %d", resp.StatusCode), nil)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		response.Error = err
-		return response
+		return errorResponse("reading response body failed", err)
 	}
+
 	var result odata.Response
-	err = json.Unmarshal(bodyBytes, &result)
-	if err != nil {
-		response.Error = err
-		return response
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return errorResponse("unmarshalling response body failed", err)
 	}
 
 	log.DefaultLogger.Debug("query complete", "noOfEntities", len(result.Value))
 
-	index := strings.Index(qm.ODataQueryString, "?")
-	
-	var tableName string
-	
-	if index != -1 {
-		tableName = qm.ODataQueryString[:index]
-	} else {
-		tableName = qm.ODataQueryString
-	}
-
-	var entityProperties []property
-
-	if qm.ODataQueryString != "" {
-		metadataBytes, err := ds.fetchMetadata(clientInstance)
-		if err != nil {
-			response.Error = err
-			return response
-		}
-
-		var metadata schema
-		err = json.Unmarshal(metadataBytes, &metadata)
-		if err != nil {
-			response.Error = err
-			return response
-		}
-
-		entityType, ok := metadata.EntitySets[tableName]
-		if !ok {
-			response.Error = fmt.Errorf("entity set %s not found in metadata", tableName)
-			return response
-		}
-
-		entityProperties = metadata.EntityTypes[entityType.EntityType].Properties
-	} else {
-		entityProperties = props
+	entityProperties, err := ds.resolveProperties(clientInstance, qm, props)
+	if err != nil {
+		return errorResponse("resolving entity properties failed", err)
 	}
 
 	if len(result.Value) > 0 {
-		firstEntry := result.Value[0]
-		for _, prop := range entityProperties {
-			for key := range firstEntry {
-				if prop.Name == key {
-					inferredType := prop.Type
-					field := data.NewField(key, nil, odata.ToArray(inferredType))
-					frame.Fields = append(frame.Fields, field)
-					break
-				}
-			}
-		}
+		ds.populateFields(frame, result.Value[0], entityProperties, qm.ODataQueryString)
 	}
 
 	for _, entry := range result.Value {
-		values := make([]interface{}, len(frame.Fields))
-
-		for i, field := range frame.Fields {
-			if value, ok := entry[field.Name]; ok {
-				var inferredType string
-				for _, prop := range entityProperties {
-					if prop.Name == field.Name {
-						inferredType = prop.Type
-						break
-					}
-				}
-				values[i] = odata.MapValue(value, inferredType)
-			} else {
-				values[i] = nil
-			}
-		}
-		frame.AppendRow(values...)
+		ds.appendRow(frame, entry, entityProperties)
 	}
 
 	response.Frames = append(response.Frames, frame)
@@ -371,4 +299,135 @@ func hasNonEmptyName(properties []property) bool {
         }
     }
     return false
+}
+
+func errorResponse(msg string, err error) backend.DataResponse {
+	return backend.DataResponse{Error: fmt.Errorf("%s: %w", msg, err)}
+}
+
+func isQueryEmpty(qm queryModel) bool {
+	return qm.ODataQueryString == "" && qm.TimeProperty == nil && 
+		(len(qm.Properties) == 0 || !hasNonEmptyName(qm.Properties))
+}
+
+func (ds *ODataSource) initFrame(refID string) *data.Frame {
+	frame := data.NewFrame("response")
+	frame.Name = refID
+	frame.Meta = &data.FrameMeta{PreferredVisualization: data.VisTypeTable}
+	return frame
+}
+
+func (ds *ODataSource) prepareProperties(qm queryModel) []property {
+	props := qm.Properties
+	if qm.TimeProperty != nil {
+		props = append(props, *qm.TimeProperty)
+	}
+	return props
+}
+
+func (ds *ODataSource) resolveProperties(clientInstance ODataClient, qm queryModel, defaultProps []property) ([]property, error) {
+	if qm.ODataQueryString == "" {
+		return defaultProps, nil
+	}
+
+	tableName := qm.ODataQueryString
+	if index := strings.Index(qm.ODataQueryString, "?"); index != -1 {
+		tableName = qm.ODataQueryString[:index]
+	}
+
+	metadataBytes, err := ds.fetchMetadata(clientInstance)
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata schema
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return nil, err
+	}
+
+	entityType, ok := metadata.EntitySets[tableName]
+	if !ok {
+		return nil, fmt.Errorf("entity set %s not found in metadata", tableName)
+	}
+
+	return metadata.EntityTypes[entityType.EntityType].Properties, nil
+}
+
+func (ds *ODataSource) populateFields(frame *data.Frame, firstEntry map[string]interface{}, entityProps []property, queryStr string) {
+	entityPropSet := make(map[string]property)
+	for _, prop := range entityProps {
+		entityPropSet[prop.Name] = prop
+	}
+
+	var orderedFields []string
+	if queryStr != "" {
+		for key := range firstEntry {
+			orderedFields = append(orderedFields, key)
+		}
+		sort.SliceStable(orderedFields, func(i, j int) bool {
+			return strings.Index(queryStr, orderedFields[i]) < strings.Index(queryStr, orderedFields[j])
+		})
+	} else {
+		for _, prop := range entityProps {
+			if _, ok := firstEntry[prop.Name]; ok {
+				orderedFields = append(orderedFields, prop.Name)
+			}
+		}
+	}
+
+	for _, fieldName := range orderedFields {
+		val := firstEntry[fieldName]
+		typ := inferType(fieldName, val, entityProps)
+		field := data.NewField(fieldName, nil, odata.ToArray(typ))
+		frame.Fields = append(frame.Fields, field)
+	}
+}
+
+func (ds *ODataSource) appendRow(frame *data.Frame, entry map[string]interface{}, entityProps []property) {
+	values := make([]interface{}, len(frame.Fields))
+	for i, field := range frame.Fields {
+		rawValue, ok := entry[field.Name]
+		if !ok {
+			values[i] = nil
+			continue
+		}
+		typ := inferType(field.Name, rawValue, entityProps)
+		values[i] = odata.MapValue(rawValue, typ)
+	}
+	frame.AppendRow(values...)
+}
+
+func inferType(fieldName string, value interface{}, props []property) string {
+	for _, prop := range props {
+		if prop.Name == fieldName {
+			return prop.Type
+		}
+	}
+
+	switch v := value.(type) {
+	case int, int8, int16, int32:
+		return "Edm.Int32"
+	case int64:
+		return "Edm.Int64"
+	case float32, float64:
+		return "Edm.Decimal"
+	case bool:
+		return "Edm.Boolean"
+	case string:
+		if _, err := time.Parse(time.RFC3339, v); err == nil {
+			return "Edm.DateTimeOffset"
+		}
+		return "Edm.String"
+	default:
+		return "Edm.String"
+	}
+}
+
+func fieldExists(fields []*data.Field, name string) bool {
+	for _, f := range fields {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
 }
