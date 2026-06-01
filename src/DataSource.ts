@@ -10,45 +10,64 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
 
   /**
    * Split the interior of a ['a','b','can't'] literal into raw inner strings. No spaces are expected between elements
-   *  - Every element starts with ' (we strip it)
-   *  - The separator between elements is ,' 
-   *  - The final element ends at the last ' in the string.
-   * Because unescaped inner quotes exist, we search for the separator ,'
+   * Every element starts with ' (we strip it) or the element is empty like in [,,'ab']
+   * Because unescaped inner quotes exist, we search for the separator ', or keep iterating over commas until a single quote is found
    * @param interior 
    * @returns 
    */
-  private splitQuotedArray(interior: string): string[] {
-    const results: string[] = [];
-    let remaining = interior;
-
+   private splitQuotedArray(interior: string) {
+    const results = [];
+    let remaining = interior; 
+    
     while (remaining.length > 0) {
-      if (!remaining.startsWith("'")) { // Each element must start with '
-        break; // Unexpected format
-      }
-
-      remaining = remaining.slice(1); // Strip the opening quote
-
-      // Find the next ,' which marks the end of this element and start of next.
-      // That index points at the comma, the element content is everything before it.
-      const separatorIndex = remaining.indexOf(",'");
-      if (separatorIndex === -1) {
-        const lastQuote = remaining.lastIndexOf("'"); // Last element: content runs to the final ' in the string
-        if (lastQuote === -1) {
-          results.push(remaining); // Malformed — take the whole remainder
+      if (remaining.startsWith("'")) {
+        // Non-empty element
+        remaining = remaining.slice(1); // strip the opening quote
+   
+        // Find the next ', which marks the end of this
+        const separatorIndex = remaining.indexOf("',");
+   
+        if (separatorIndex === -1) {
+          // Last quoted element: content runs to the final ' in the string,
+          // followed by optional trailing empty slots (commas).
+          const lastQuote = remaining.lastIndexOf("'");
+          if (lastQuote === -1) {
+            results.push(remaining); // malformed - take the whole remainder
+            break;
+          }
+          results.push(remaining.slice(0, lastQuote));
+          // Any trailing commas after the closing quote become empty slots.
+          remaining = remaining.slice(lastQuote + 1);
+          // fall through to the comma-handling loop below
         } 
         else {
-          results.push(remaining.slice(0, lastQuote));
+          results.push(remaining.slice(0, separatorIndex)); // content before closing quote
+          remaining = remaining.slice(separatorIndex + 1);  // move past the comma; next char is '
+          continue;
         }
+      }
+   
+      // Empty slots (leading, trailing, or consecutive commas)
+      // remaining starts with ',' or is just leftover commas after the last quote.
+      while (remaining.startsWith(',')) {
+        if (remaining === interior) {results.push(null)}; // in the case that the array starts with a comma
+        const next = remaining.slice(1);
+        if (next.length === 0 || next.startsWith(',')) {
+          results.push(null); // comma followed by another comma or end → empty slot
+        }
+        // else: comma followed by ' → next quoted element, let the outer loop handle it
+        remaining = next;
+      }
+   
+      // If something other than ' or , is left the format is unexpected — stop.
+      if (remaining.length > 0 && !remaining.startsWith("'")) {
         break;
-      } 
-      else {
-        results.push(remaining.slice(0, separatorIndex - 1)); // strip the closing quote
-        remaining = remaining.slice(separatorIndex + 1); // start next iteration with the next opening quote
       }
     }
-
+   
     return results;
   }
+
 
   /**
    * Attempt to parse a string that represent an array like ['a','b'].
@@ -66,7 +85,7 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
 
     // Determine if this is a quoted-string array by checking if the first
     // non-whitespace character after '[' is a single quote.
-    const isStringArray = interior.trimStart().startsWith("'");
+    const isStringArray = interior.trimStart().indexOf("[,") !== -1 || interior.trimStart().indexOf(",'") !== -1;  // [, ou ['
 
     if (!isStringArray) {
       // Unquoted array (numbers, bools, etc.) — simple comma split is safe.
@@ -81,8 +100,12 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
     //   ['a','b'] -- ['a', 'b']
     //   ['can't','d'] -- ['can''t', 'd']
     //   ['a,b','c'] -- ['a,b', 'c']
+    //   [,,'a&b','bc',,] -- [,,'a%26b','bc',,]
     const rawElements = this.splitQuotedArray(interior);
     const processed = rawElements.map(raw => { // raw is the inner content (outer quotes already stripped)
+      if (raw === null) {
+        return ''; // empty -> preserve the comma, emit nothing between them
+      }
       return this.wrapSingleQuotes(this.encodeODataValue(raw, usePost, true));
     });
 
