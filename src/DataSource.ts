@@ -1,5 +1,5 @@
 import { DataQueryRequest, DataSourceInstanceSettings, MetricFindValue, ScopedVars } from '@grafana/data';
-import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
+import { DataSourceWithBackend, getTemplateSrv, VariableInterpolation } from '@grafana/runtime';
 import { ODataOptions, ODataQuery } from './types';
 import { firstValueFrom } from 'rxjs';
 
@@ -145,8 +145,7 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
     });
 
     // Pre-pass: find variables already wrapped in '...'
-    const quotedVarIndices = new Set<number>();
-    let prePassIndex = 0;
+    const quotedVarNames = new Set<string>();
 
     query.oDataQueryString?.replace(
       /'((?:[^']|'')*)'/g,
@@ -155,8 +154,9 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
         let m: RegExpExecArray | null;
         while ((m = varPattern.exec(content)) !== null) {
           const varName = m[1] ?? m[2];
-          if (!isKnownVar(varName)) { continue; }
-          quotedVarIndices.add(prePassIndex++);
+          if (isKnownVar(varName)) {
+            quotedVarNames.add(varName);
+          }
         }
         return _match; // no substitution
       }
@@ -175,14 +175,13 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
       }
     );
 
-    // Strip pass: remove singlequote format, collect flags
+    // Strip pass: remove :singlequote format, collect flags keyed by variable name
     interface VarFlags {
       wrapQuotes: boolean;
       escapeQuotes: boolean;
       scalarOnly: boolean; // the value cannot be an actual array, but can be a string representing an array
     }
-    const varFlags: VarFlags[] = [];
-    let stripIndex = 0;
+    const varFlagsMap = new Map<string, VarFlags>();
 
     const stripped = withoutSurroundingQuotes?.replace(
       /\$\{([^:}]+)(?::([^}]+))?\}|\$([a-zA-Z_][a-zA-Z0-9_]*)/g, // matches ${var1:format} or $var2
@@ -191,10 +190,9 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
         if (!isKnownVar(varName)) { return match; }
 
         const hasSingleQuoteFormat = format === 'singlequote';
-        const wasQuoted = quotedVarIndices.has(stripIndex);
-        stripIndex++;
+        const wasQuoted = quotedVarNames.has(varName);
 
-        varFlags.push({
+        varFlagsMap.set(varName, {
           wrapQuotes: hasSingleQuoteFormat || wasQuoted,
           escapeQuotes: hasSingleQuoteFormat || wasQuoted,
           scalarOnly: wasQuoted && !hasSingleQuoteFormat,
@@ -208,12 +206,11 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
     );
 
     // Replacement pass
-    let callIndex = 0;
     const oDataQueryString = templateSrv.replace(
       stripped,
       scopedVars,
-      (value: string | string[]) => { // :singlequote was removed but any other format like :percentencode override this one
-        const flags = varFlags[callIndex++] ?? {
+      (value: string | string[], varInterpolation: any) => { // :singlequote was removed but any other format like :percentencode override this one
+        const flags = varFlagsMap.get(varInterpolation.id) ?? { // The tooltip suggests this is of the type VariableInterpolation[] but it does not seem so
           wrapQuotes: false,
           escapeQuotes: false,
           scalarOnly: false,
