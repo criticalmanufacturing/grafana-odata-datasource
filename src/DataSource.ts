@@ -1,5 +1,5 @@
 import { DataQueryRequest, DataSourceInstanceSettings, MetricFindValue, ScopedVars } from '@grafana/data';
-import { DataSourceWithBackend, getTemplateSrv, VariableInterpolation } from '@grafana/runtime';
+import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
 import { ODataOptions, ODataQuery } from './types';
 import { firstValueFrom } from 'rxjs';
 
