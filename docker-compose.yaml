@@ -7,11 +7,13 @@ services:
       context: ./.config
       args:
         grafana_image: ${GRAFANA_IMAGE:-grafana-enterprise}
-        grafana_version: ${GRAFANA_VERSION:-10.2.0}
+        grafana_version: ${GRAFANA_VERSION:-12.0.4}
     ports:
       - 3000:3000/tcp
     environment:
       GF_LOG_LEVEL: 'debug'
+    # extra_hosts: # You may need this to access Data Sources running on localhost
+      # - "host.docker.internal:host-gateway"
     volumes:
       - ./dist:/var/lib/grafana/plugins/criticalmanufacturing-odata-datasource
       - ./provisioning:/etc/grafana/provisioning
