@@ -8,7 +8,7 @@ COPY srv /app/srv
 COPY mock /app/mock
 
 RUN yarn global add ts-node
-RUN yarn global add @sap/cds-dk
+RUN yarn global add @sap/cds-dk@8.9.10
 
 RUN yarn install
 

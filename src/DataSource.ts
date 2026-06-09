@@ -210,7 +210,7 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
       stripped,
       scopedVars,
       (value: string | string[], varInterpolation: any) => { // :singlequote was removed but any other format like :percentencode override this one
-        const flags = varFlagsMap.get(varInterpolation.id) ?? { // The tooltip suggests this is of the type VariableInterpolation[] but it does not seem so
+        const flags = varFlagsMap.get(varInterpolation.name) ?? { // The tooltip suggests this is of the type VariableInterpolation[] but it does not seem so
           wrapQuotes: false,
           escapeQuotes: false,
           scalarOnly: false,
