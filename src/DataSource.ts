@@ -120,7 +120,7 @@ export class ODataSource extends DataSourceWithBackend<ODataQuery, ODataOptions>
    * @returns 
    */
   private encodeODataValue(value: string, usePost: boolean, escapeSingleQuotes: boolean){
-    const escaped = escapeSingleQuotes ? value.replace(/'/g, "''") : value;
+    const escaped = escapeSingleQuotes ? value.replace(/'/g, "''").replace(/\\/g, "\\\\") : value;
     const encoded = encodeURIComponent(escaped);
     // ! Grafana decodes the query string once before forwarding when using POST so we encode it twice
     return usePost ? encodeURIComponent(encoded) : encoded;
